@@ -14,20 +14,19 @@
 #ifndef _AXP173_H_
 #define _AXP173_H_
 
-#include "I2C_PORT.h"
+#include <Wire.h>
 
-
-
-typedef enum
+enum OutputChannel
 {                 // 可调电压输出通道（ldo1为RTC电源，电压不可调）
     OP_DCDC1 = 0, // 0
     OP_LDO4,      // 1
     OP_LDO2,      // 2
     OP_LDO3,      // 3
     OP_DCDC2,     // 4
-} OUTPUT_CHANNEL;
+    OP_EXTEN = 6,
+};
 
-typedef enum
+enum AdcChannel
 {               // ADC采集电压与电流参数 （ADC使能地址：0x82;默认值：0x83）
     ADC_TS = 0, // 温敏电阻管脚ADC
     ADC_APS_V,  // APS电压
@@ -37,9 +36,9 @@ typedef enum
     ADC_ACIN_V, // 交流输入电压
     ADC_BAT_C,  // 电池输入电流
     ADC_BAT_V,  // 电池输入电压
-} ADC_CHANNEL;
+};
 
-typedef enum
+enum ChargeCurrent
 {                  // 电池充电电流设置 （地址：0x33;初值：0xC8）
     CHG_100mA = 0, // 0000
     CHG_190mA,     // 0001
@@ -57,47 +56,65 @@ typedef enum
     CHG_1160mA,    // 1101
     CHG_1240mA,    // 1110
     CHG_1320mA,    // 1111
-} CHARGE_CURRENT;
+};
 
-typedef enum
+enum CoulometerStatus
 { // 库仑计控制 （地址：0xB8;默认值：0x00）
     COULOMETER_RESET = 5,
     COULOMETER_PAUSE,
     COULOMETER_ENABLE,
-} COULOMETER_CTRL;
+};
 
-typedef enum
+enum PowerOffPressTime
 {                    // 关机时长设置 （地址：0x36;【只操作01两位】）
     POWEROFF_4S = 0, // 00
     POWEROFF_6S,     // 01
     POWEROFF_8S,     // 10
     POWEROFF_10S,    // 11
-} POWEROFF_TIME;
+};
 
-typedef enum
-{                               // 开机时长设置（地址：0x36;【只操作67两位】）
-    POWERON_128mS = 0B00000000, // 0000 0000
-    POWERON_512mS = 0B01000000, // 0100 0000
-    POWERON_1S = 0B10000000,    // 1000 0000
-    POWERON_2S = 0B11000000,    // 1100 0000
-} POWERON_TIME;
+enum PowerOnPressTime
+{                      // 开机时长设置（地址：0x36;【只操作67两位】）
+    POWERON_128mS = 0, // 0000 0000
+    POWERON_512mS,     // 0100 0000
+    POWERON_1S,        // 1000 0000
+    POWERON_2S,        // 1100 0000
+};
 
-typedef enum
+enum LongPressTime
 {                  // 长按键PEK触发时间（地址：0x36）
     LPRESS_1S = 0, // 00
     LPRESS_1_5S,   // 01
     LPRESS_2S,     // 10
     LPRESS_2_5S,   // 11
-} LONG_PRESS_TIME;
+};
 
-class AXP173 : public I2C_PORT
+class AXP173
 {
 private:
-    uint16_t _getMin(uint16_t a, uint16_t b);
-    uint16_t _getMax(uint16_t a, uint16_t b);
-    uint16_t _getMid(uint16_t input, uint16_t min, uint16_t max);
+    TwoWire &_wire;
+    uint8_t _dev_addr;
+
+    bool writeRegs(uint8_t addr, const uint8_t *buf, uint8_t len);
+    uint8_t readRegs(uint8_t addr, uint8_t *buf, uint8_t len);
+
+    inline bool writeReg(uint8_t addr, uint8_t data)
+    {
+        return writeRegs(addr, &data, 1);
+    }
+
+    inline uint8_t readReg(uint8_t addr)
+    {
+        uint8_t data;
+        if (readRegs(addr, &data, 1) != 1)
+        {
+            return 0; // Read failed
+        }
+        return data;
+    }
 
 public:
+    AXP173(TwoWire &wire = Wire, uint8_t dev_addr = 0x34);
     bool begin(TwoWire *wire);
 
     void setPmuPower();
@@ -117,32 +134,31 @@ public:
     bool isChargeCsmaller(); // 指示充电电流是否小于期望电流（0：实际充电电流等于期望电流；1：实际充电电流小于期望电流）
 
     /* Power output control （电源输出控制）*/
-    void setEnPinEnable(bool state);                                 // 外部升压芯片使能（EN脚高低电平控制）
-    void setOutputEnable(OUTPUT_CHANNEL channel, bool state);        // channel：设置电源输出通道（OUTPUT_CHANNEL）；state：设置是否输出
-    void setOutputVoltage(OUTPUT_CHANNEL channel, uint16_t voltage); // channel：设置电源输出通道（OUTPUT_CHANNEL）；voltage：设置输出电压
-                                                                     // DCDC1 & LDO4: 700~3500(mV), DCDC2: 700~2275(mV), LDO2 & LDO3: 1800~3300(mV)
+    void setOutputEnable(OutputChannel channel, bool state);        // channel：设置电源输出通道（OUTPUT_CHANNEL）；state：设置是否输出
+    void setOutputVoltage(OutputChannel channel, uint16_t voltage); // channel：设置电源输出通道（OUTPUT_CHANNEL）；voltage：设置输出电压
+                                                                    // DCDC1 & LDO4: 700~3500(mV), DCDC2: 700~2275(mV), LDO2 & LDO3: 1800~3300(mV)
     /* Basic control (开关芯片控制) */
-    void powerOFF(void);                         // 调用直接关机
-    bool powerState(void);                       // 若关机则返回false
-    void setPowerOffTime(POWEROFF_TIME offTime); // 设置关机时间（输入参数见POWEROFF_TIME枚举体）
-    void setPowerOnTime(POWERON_TIME onTime);    // 设置开机时间（输入参数见POWERON_TIME枚举体）
+    void powerOFF(void);                             // 调用直接关机
+    bool powerState(void);                           // 若关机则返回false
+    void setPowerOffTime(PowerOffPressTime offTime); // 设置关机时间（输入参数见POWEROFF_TIME枚举体）
+    void setPowerOnTime(PowerOnPressTime onTime);    // 设置开机时间（输入参数见POWERON_TIME枚举体）
 
     /* Charge control (电池充电设置) */
     void setChargeEnable(bool state);              // 充电功能使能控制位7bit（上电默认开启）
-    void setChargeCurrent(CHARGE_CURRENT current); // 充电电流设置0-3bit，写入电流见CHARGE_CURRENT枚举体
+    void setChargeCurrent(ChargeCurrent current); // 充电电流设置0-3bit，写入电流见CHARGE_CURRENT枚举体
 
     /* ADC control (ADC设置) */
-    void setADCEnable(ADC_CHANNEL channel, bool state); // ADC使能1 channel：设置ADC使能通道 参数见ADC_CHANNEL枚举体 state:设置是否输出
+    void setADCEnable(AdcChannel channel, bool state); // ADC使能1 channel：设置ADC使能通道 参数见ADC_CHANNEL枚举体 state:设置是否输出
     void setChipTempEnable(bool state);                 // ADC使能2 设置芯片温度检测ADC使能 state:设置是否输出 默认输出
 
     /* Coulometer control (库仑计模式设置) */
-    void setCoulometer(COULOMETER_CTRL option, bool state); // 设置库仑计状态（开关ENABLE，暂停PAUSE，清零RESET）
+    void setCoulometer(CoulometerStatus option, bool state); // 设置库仑计状态（开关ENABLE，暂停PAUSE，清零RESET）
 
     /* Coulometer data (库仑计数据) */
-    uint32_t getCoulometerChargeData(void);    // 电池充电库仑计数据寄存器3
-    uint32_t getCoulometerDischargeData(void); // 电池放电库仑计数据寄存器3
-    float GetBatCoulombInput(void);            // 库仑计输入计数
-    float GetBatCoulombOutput(void);           // 库仑计输出计数
+    uint32_t getCoulometerChargeDataRaw(void);    // 电池充电库仑计数据寄存器3
+    uint32_t getCoulometerDischargeDataRaw(void); // 电池放电库仑计数据寄存器3
+    float getCoulometerChargeData(void);            // 库仑计输入计数
+    float getCoulometerDischargeData(void);           // 库仑计输出计数
     float getCoulometerData(void);             // 计算后返回的值 get coulomb val affter calculation
 
     /* BAT data (电池状态数据) */
@@ -168,9 +184,9 @@ public:
     bool getShortPressIRQState();    // 读取短按键IRQ中断状态
     void setShortPressIRQDisabale(); // 对应位写1结束中断
     /* LongPress */
-    void setLongPressTime(LONG_PRESS_TIME pressTime); // 设置长按键触发时间
-    bool getLongPressIRQState();                      // 读取长按键IRQ中断状态
-    void setLongPressIRQDisabale();                   // 对应位写1结束中断
+    void setLongPressTime(LongPressTime pressTime); // 设置长按键触发时间
+    bool getLongPressIRQState();                    // 读取长按键IRQ中断状态
+    void setLongPressIRQDisabale();                 // 对应位写1结束中断
 
     /* SleepMode */
     void prepareToSleep(void);
