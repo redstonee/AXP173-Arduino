@@ -12,7 +12,9 @@
  */
 #include "AXP173.h"
 
-// "&" 与位运算置位，"|" 或位运算写入
+/* HOST MODE(TWSI) */
+/* AXP173 device address */
+#define AXP173_ADDR 0x34 // 设备地址
 
 /* Private functions （在类内判断数字大中小。主要是为了限制设置电压时输入超出范围，incline定义快速读取）*/
 inline uint16_t AXP173::_getMin(uint16_t a, uint16_t b) {
@@ -28,28 +30,16 @@ inline uint16_t AXP173::_getMid(uint16_t input, uint16_t min, uint16_t max) {
 }
 
 /* Public functions (包含IIC的初始化以及是否初始化的判断)*/
-#ifdef ARDUINO
 bool AXP173::begin(TwoWire * wire) {
     _I2C_init(wire, AXP173_ADDR);
 
     /* Set PMU Voltage */
-    setPmuPower();
+    // setPmuPower();
 
     /* Set PMU Config */
     setPmuConfig();
     return _I2C_checkDevAvl();
 }
-#else
-void AXP173::begin() {
-/* 各种电压设置与ADC使能一类可以写在这里 */
-
-    /* Set PMU Voltage */
-    setPmuPower();
-
-    /* Set PMU Config */
-    setPmuConfig();
-}
-#endif
 
 //写在一切IIC设备初始化前面，电源芯片必须第一个初始化，并且在其他设备iic初始化之前设置好电压，否则其他设备程序初始化完结果没供电。
 void AXP173::setPmuPower() {    //电源通道电压输出设置，交换位置可以设置上电时序，中间加delay可以延迟上电
@@ -539,5 +529,3 @@ void AXP173::RestoreFromLightSleep(void) {      //ldo重启输出
     //setOutputVoltage(AXP173::OP_LDO3, 3300);    //LDO3电压设置为3.300V
 
 }
-
-AXP173 pmu;
