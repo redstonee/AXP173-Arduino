@@ -15,6 +15,8 @@
 #define _AXP173_H_
 
 #include <Wire.h>
+#include <functional>
+#include <bitset>
 
 enum OutputChannel
 {                 // 可调电压输出通道（ldo1为RTC电源，电压不可调）
@@ -91,6 +93,49 @@ enum LongPressTime
 
 class AXP173
 {
+public:
+    enum AXP_IRQn : uint8_t
+    {
+        /* IRQ register 1*/
+        RESERVED1_IRQn,      // Reserved
+        VBUS_UNDERVOLT_IRQn, // VBUS voltage under VHOLD
+        VBUS_REMOVE_IRQn,    // VBUS remove
+        VBUS_INSERT_IRQn,    // VBUS insert
+        VBUS_OVERVOLT_IRQn,  // VBUS over voltage
+        ACIN_REMOVE_IRQn,    // ACIN remove
+        ACIN_INSERT_IRQn,    // ACIN insert
+        ACIN_OVERVOLT_IRQn,  // ACIN over voltage
+        /* IRQ register 2*/
+        BAT_UNDER_TEMP_IRQn, // Battery temperature under limit
+        BAT_OVER_TEMP_IRQn,  // Battery temperature over limit
+        BAT_CHG_FIN_IRQn,    // Battery charging finish
+        BAT_CHG_START_IRQn,  // Battery charging start
+        BAT_ACT_STOP_IRQn,   // Battery activation stop
+        BAT_ACT_START_IRQn,  // Battery activation start
+        BAT_REMOVE_IRQn,     // Battery remove
+        BAT_INSERT_IRQn,     // Battery insert
+        /* IRQ register 3*/
+        PEK_LONG_PRESS_IRQn,    // PEK long press
+        PEK_SHORT_PRESS_IRQn,   // PEK short press
+        RESERVED2_IRQn,         // Reserved
+        LDO4_UNDERVOLT_IRQn,    // LDO4 output voltage too low
+        DCDC2_UNDERVOLT_IRQn,   // DCDC2 output voltage too low
+        DCDC1_UNDERVOLT_IRQn,   // DCDC1 output voltage too low
+        BAT_CHG_UNDERCURR_IRQn, // Battery charging current too low
+        AXP_OVER_TEMP_IRQn,     // Chip internal temperature over limit
+        /* IRQ register 4*/
+        APS_UNDERVOLT_IRQn,   // APS voltage under limit
+        RESERVED3_IRQn,       // Reserved
+        VBUS_SESS_END_IRQn,   // VBUS session end
+        VBUS_SESS_START_IRQn, // VBUS session start
+        VBUS_INVALID_IRQn,    // VBUS invalid
+        VBUS_VALID_IRQn,      // VBUS valid
+        RESERVED4_IRQn,       // Reserved
+        RESERVED5_IRQn,       // Reserved
+
+        NUM_IRQn, // All interrupts
+    };
+
 private:
     TwoWire &_wire;
     uint8_t _dev_addr;
@@ -106,7 +151,7 @@ private:
     inline uint8_t readReg(uint8_t addr)
     {
         uint8_t data;
-        if (readRegs(addr, &data, 1) != 1)
+        if (!readRegs(addr, &data, 1))
         {
             return 0; // Read failed
         }
@@ -115,10 +160,10 @@ private:
 
 public:
     AXP173(TwoWire &wire = Wire, uint8_t dev_addr = 0x34);
-    bool begin(TwoWire *wire);
+    bool begin();
 
     void setPmuPower();
-    void setPmuConfig();
+    void setDefaultConfig();
 
     /* Power input state（输入电源状态检测） */
     // 地址：0x00
@@ -138,18 +183,20 @@ public:
     void setOutputVoltage(OutputChannel channel, uint16_t voltage); // channel：设置电源输出通道（OUTPUT_CHANNEL）；voltage：设置输出电压
                                                                     // DCDC1 & LDO4: 700~3500(mV), DCDC2: 700~2275(mV), LDO2 & LDO3: 1800~3300(mV)
     /* Basic control (开关芯片控制) */
-    void powerOFF(void);                             // 调用直接关机
-    bool powerState(void);                           // 若关机则返回false
-    void setPowerOffTime(PowerOffPressTime offTime); // 设置关机时间（输入参数见POWEROFF_TIME枚举体）
-    void setPowerOnTime(PowerOnPressTime onTime);    // 设置开机时间（输入参数见POWERON_TIME枚举体）
+    void powerOFF(void);                                  // 调用直接关机
+    bool powerState(void);                                // 若关机则返回false
+    void setPowerKeyShutdownEnable(bool enabled);         // 按键时长大于关机时长自动关机使能（默认使能）
+    void setLongPressTime(LongPressTime pressTime);       // 设置长按键触发时间
+    void setPowerOffPressTime(PowerOffPressTime offTime); // 设置关机时间（输入参数见POWEROFF_TIME枚举体）
+    void setPowerOnPressTime(PowerOnPressTime onTime);    // 设置开机时间（输入参数见POWERON_TIME枚举体）
 
     /* Charge control (电池充电设置) */
-    void setChargeEnable(bool state);              // 充电功能使能控制位7bit（上电默认开启）
+    void setChargeEnable(bool state);             // 充电功能使能控制位7bit（上电默认开启）
     void setChargeCurrent(ChargeCurrent current); // 充电电流设置0-3bit，写入电流见CHARGE_CURRENT枚举体
 
     /* ADC control (ADC设置) */
     void setADCEnable(AdcChannel channel, bool state); // ADC使能1 channel：设置ADC使能通道 参数见ADC_CHANNEL枚举体 state:设置是否输出
-    void setChipTempEnable(bool state);                 // ADC使能2 设置芯片温度检测ADC使能 state:设置是否输出 默认输出
+    void setChipTempEnable(bool state);                // ADC使能2 设置芯片温度检测ADC使能 state:设置是否输出 默认输出
 
     /* Coulometer control (库仑计模式设置) */
     void setCoulometer(CoulometerStatus option, bool state); // 设置库仑计状态（开关ENABLE，暂停PAUSE，清零RESET）
@@ -157,9 +204,9 @@ public:
     /* Coulometer data (库仑计数据) */
     uint32_t getCoulometerChargeDataRaw(void);    // 电池充电库仑计数据寄存器3
     uint32_t getCoulometerDischargeDataRaw(void); // 电池放电库仑计数据寄存器3
-    float getCoulometerChargeData(void);            // 库仑计输入计数
-    float getCoulometerDischargeData(void);           // 库仑计输出计数
-    float getCoulometerData(void);             // 计算后返回的值 get coulomb val affter calculation
+    float getCoulometerChargeData(void);          // 库仑计输入计数
+    float getCoulometerDischargeData(void);       // 库仑计输出计数
+    float getCoulometerData(void);                // 计算后返回的值 get coulomb val affter calculation
 
     /* BAT data (电池状态数据) */
     float getBatVoltage(); // 返回高八位 + 低四位电池电压   地址：高0x78 低0x79
@@ -173,26 +220,13 @@ public:
     float getVBUSCurrent(); // 返回高八位 + 低四位USB输入电流   地址：高0x5C 低0x5D
 
     /* Temperature data (温度监控数据) */
-    float getAXP173Temp(); // 返回高八位 + 低四位芯片内置温度传感器温度 地址：高0x5E 低0x5F
-    float getTSTemp();     // 返回高八位 + 低四位芯片TS脚热敏电阻检测到的电池温度  地址：高0x62 低0x63
+    float getChipTemp(); // 返回高八位 + 低四位芯片内置温度传感器温度 地址：高0x5E 低0x5F
+    float getTSTemp();   // 返回高八位 + 低四位芯片TS脚热敏电阻检测到的电池温度  地址：高0x62 低0x63
 
-    /* Read IRQ enable and state REG get PEK Long and Short Press state(读取与操作IRQ使能与状态寄存器获取长按键与短按键状态) */
-    void aoToPowerOFFEnabale(); // 按键时长大于关机时长自动关机使能（默认使能）
-    void initIRQState();        // 所有IRQ中断使能置零 REG40H 41H 42H 43H 4AH
-    /* ShortPress */
-    void setShortPressEnabale();     // 短按键使能REG31H[3] 调用后立刻导致短按键中断发生
-    bool getShortPressIRQState();    // 读取短按键IRQ中断状态
-    void setShortPressIRQDisabale(); // 对应位写1结束中断
-    /* LongPress */
-    void setLongPressTime(LongPressTime pressTime); // 设置长按键触发时间
-    bool getLongPressIRQState();                    // 读取长按键IRQ中断状态
-    void setLongPressIRQDisabale();                 // 对应位写1结束中断
-
-    /* SleepMode */
-    void prepareToSleep(void);
-    void lightSleep(uint64_t time_in_us);
-    void deepSleep(uint64_t time_in_us);
-    void RestoreFromLightSleep(void);
+    void enableIRQs(std::bitset<NUM_IRQn> irqs);
+    void disableIRQs(std::bitset<NUM_IRQn> irqs);
+    void clearIRQFlags(std::bitset<NUM_IRQn> irqs);
+    std::bitset<NUM_IRQn> getIRQFlags();
 };
 
 #endif

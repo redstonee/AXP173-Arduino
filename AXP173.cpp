@@ -11,6 +11,7 @@
  * @copyright Copyright (c) 2022
  */
 #include "AXP173.h"
+#include <Arduino.h>
 
 // Controlling and status registers
 constexpr uint8_t REG_PWR_STAT = 0x00;         // Power status register
@@ -94,7 +95,8 @@ inline uint16_t clampToRange(uint16_t input, uint16_t min, uint16_t max)
     return std::max(std::min(input, max), min);
 }
 
-AXP173::AXP173(TwoWire &wire, uint8_t dev_addr) : _wire(wire), _dev_addr(dev_addr)
+AXP173::AXP173(TwoWire &wire, uint8_t dev_addr)
+    : _wire(wire), _dev_addr(dev_addr)
 {
 }
 
@@ -127,11 +129,18 @@ uint8_t AXP173::readRegs(uint8_t addr, uint8_t *buf, uint8_t len)
     return bytesRead;
 }
 
-/* Public functions (包含IIC的初始化以及是否初始化的判断)*/
-bool AXP173::begin(TwoWire *wire)
+/**
+ * @brief Initialize the AXP173 PMIC.
+ * This function attempts to write a magic data sequence to the PMIC's data buffer
+ * and reads it back to verify that the PMIC is responding correctly.
+ * If the read data matches the magic data, it proceeds to set the PMIC configuration.
+ *
+ * @return true if initialization is successful, false otherwise.
+ */
+bool AXP173::begin()
 {
     // Try to write something into the PMIC's data buffer
-    constexpr uint8_t magicData[]{0x11, 0x45, 0x14, 0x19, 0x19, 0x81};
+    constexpr uint8_t magicData[]{0x11, 0x45, 0x14};
     writeRegs(REG_DATA_BUFF, magicData, sizeof(magicData));
     // Read back the data to check if the PMIC is responding
     uint8_t readBuf[sizeof(magicData)];
@@ -146,7 +155,10 @@ bool AXP173::begin(TwoWire *wire)
     }
 
     /* Set PMU Config */
-    setPmuConfig();
+    setDefaultConfig();
+    disableIRQs(NUM_IRQn);   // Disable all interrupts
+    clearIRQFlags(NUM_IRQn); // Clear all interrupts
+
     return true;
 }
 
@@ -177,16 +189,14 @@ void AXP173::setPmuPower()
     setChargeEnable(true);       // 充电功能使能
     setChargeCurrent(CHG_450mA); // 设置充电电流为450mA
 }
-void AXP173::setPmuConfig()
+void AXP173::setDefaultConfig()
 { // 电源芯片ADC，库仑计等功能设置
-    /* Clear IRQ */
-    initIRQState();
 
     /* Set on time */
-    setPowerOnTime(POWERON_1S); // 设置PEK开机时长为1S
+    setPowerOnPressTime(POWERON_1S); // 设置PEK开机时长为1S
 
     /* Set off time */
-    setPowerOffTime(POWEROFF_4S); // 设置PEK关机时长为4S（我这个芯片因为定制好像只能设置6，8，10s）
+    setPowerOffPressTime(POWEROFF_4S); // 设置PEK关机时长为4S（我这个芯片因为定制好像只能设置6，8，10s）
 
     /* Set PEKLongPress time */
     setLongPressTime(LPRESS_1_5S); // 设置PEK长按键时长为1.5S
@@ -353,7 +363,7 @@ bool AXP173::powerState(void)
  * 函数写法功能解析："&" 运算先将 "4 and 5 bit" 置位，然后保留其它位已经写 "1" 的配置，
  * 最后 "|" 运算对 "4 and 5 bit" 写"入 " 0 or 1 "
  */
-void AXP173::setPowerOnTime(PowerOnPressTime onTime)
+void AXP173::setPowerOnPressTime(PowerOnPressTime onTime)
 { // 7 and 6 bit   开机时间
     uint8_t buff = readReg(REG_PEK_CTL);
     buff &= 0B00111111;    // 保留前6位，重置7 and 6 bit
@@ -361,7 +371,7 @@ void AXP173::setPowerOnTime(PowerOnPressTime onTime)
     writeReg(REG_PEK_CTL, buff);
 }
 
-void AXP173::setPowerOffTime(PowerOffPressTime offTime)
+void AXP173::setPowerOffPressTime(PowerOffPressTime offTime)
 { // 0 and 1 bit   关机时间
     uint8_t buff = readReg(REG_PEK_CTL);
     buff &= 0B11111100; // 保留前6位，重置0 and 1 bit
@@ -525,7 +535,7 @@ float AXP173::getCoulometerData(void)
  */
 float AXP173::getBatVoltage()
 {
-    float ADCLSB = 1.1;
+    constexpr float ADCLSB = 1.1;
     uint8_t buff[2];
     if (readRegs(REG_ADC_BAT_VH, buff, 2) != 2)
     {
@@ -543,7 +553,7 @@ float AXP173::getBatVoltage()
  */
 float AXP173::getBatCurrent()
 {
-    float ADCLSB = 0.5;
+    constexpr float ADCLSB = 0.5;
     uint8_t buff[4];
     if (readRegs(REG_ADC_BAT_CHG_CH, buff, 4) != 4)
     {
@@ -556,135 +566,135 @@ float AXP173::getBatCurrent()
     return (CurrentIn - CurrentOut) * ADCLSB;
 }
 
-
 // 返回高八位 + 中八位 + 低八位电池瞬时功率  地址：高0x70 中0x71 低0x72 数据乘以精度减小误差
 float AXP173::getBatPower()
 {
-    float VoltageLSB = 1.1;
-    float CurrentLCS = 0.5;
-    uint32_t ReData = _I2C_read24Bit(0x70);
+    constexpr float VoltageLSB = 1.1;
+    constexpr float CurrentLCS = 0.5;
+    uint8_t buff[3];
+    if (readRegs(REG_BAT_PWR_H, buff, 3) != 3)
+    {
+        return 0; // 读取失败
+    }
+    // 将高八位、中八位和低八位合并为一个24位整数
+    uint32_t ReData = (static_cast<uint32_t>(buff[0]) << 16) |
+                      (static_cast<uint32_t>(buff[1]) << 8) |
+                      static_cast<uint32_t>(buff[2]);
+
     return VoltageLSB * CurrentLCS * ReData / 1000.0;
 }
-
-/* uint32_t AXP173::getChargeTimeMS() {
-
-    static uint32_t chargeTime = 0;
-    static uint32_t startTime = 0;
-    uint32_t nowTime = millis();
-
-    if (isCharging())
-    {
-        chargeTime = nowTime - startTime;
-        return chargeTime;
-    }
-    else
-    {
-        startTime = nowTime;
-        return chargeTime;
-    }
-
-} */
 
 // 返回高八位 + 低四位USB输入电压   地址：高0x5A 低0x5B  精度：1.7mV
 float AXP173::getVBUSVoltage()
 {
-    float ADCLSB = 1.7 / 1000.0;
-    uint16_t ReData = _I2C_read12Bit(0x5A);
-    return ReData * ADCLSB;
+    constexpr float ADCLSB = 1.7;
+    uint8_t buff[2];
+    if (readRegs(REG_ADC_VBUS_VH, buff, 2) != 2)
+    {
+        return 0; // 读取失败
+    }
+    // 将高八位和低四位合并为一个12位整数
+    uint16_t adcValue = (static_cast<uint16_t>(buff[0]) << 4) | buff[1];
+    // 返回电压值，单位为毫伏
+    return adcValue * ADCLSB;
 }
 
 // 返回高八位 + 低四位USB输入电流   地址：高0x5C 低0x5D  精度：0.375mA
 float AXP173::getVBUSCurrent()
 {
-    float ADCLSB = 0.375;
-    uint16_t ReData = _I2C_read12Bit(0x5C);
-    return ReData * ADCLSB;
+    constexpr float ADCLSB = 0.375;
+    uint8_t buff[2];
+    if (readRegs(REG_ADC_VBUS_CH, buff, 2) != 2)
+    {
+        return 0; // 读取失败
+    }
+    // 将高八位和低四位合并为一个12位整数
+    uint16_t adcValue = (static_cast<uint16_t>(buff[0]) << 4) | buff[1];
+    // 返回电流值，单位为毫安
+    return adcValue * ADCLSB;
 }
 
 // 返回高八位 + 低四位芯片内置温度传感器温度 地址：高0x5E 低0x5F 精度：0.1℃  最小值-144.7℃
-float AXP173::getAXP173Temp()
+float AXP173::getChipTemp()
 {
-    float ADCLSB = 0.1;
-    const float OFFSET_DEG_C = -144.7;
-    uint16_t ReData = _I2C_read12Bit(0x5E);
-    return OFFSET_DEG_C + ReData * ADCLSB;
+    constexpr float ADCLSB = 0.1;
+    constexpr float OFFSET_DEG_C = -144.7;
+
+    uint8_t buff[2];
+    if (readRegs(REG_ADC_INT_TS_H, buff, 2) != 2)
+    {
+        return 0; // 读取失败
+    }
+    // 将高八位和低四位合并为一个12位整数
+    uint16_t adcValue = (static_cast<uint16_t>(buff[0]) << 4) | buff[1];
+
+    return OFFSET_DEG_C + adcValue * ADCLSB;
 }
 
 // 返回高八位 + 低四位芯片TS脚热敏电阻检测到的电池温度  地址：高0x62 低0x63 精度：0.1℃  最小值-144.7℃
 float AXP173::getTSTemp()
 {
-    float ADCLSB = 0.1;
-    const float OFFSET_DEG_C = -144.7;
-    uint16_t ReData = _I2C_read12Bit(0x62);
-    return OFFSET_DEG_C + ReData * ADCLSB;
+    constexpr float ADCLSB = 0.1;
+    constexpr float OFFSET_DEG_C = -144.7;
+
+    uint8_t buff[2];
+    if (readRegs(REG_ADC_BAT_TS_H, buff, 2) != 2)
+    {
+        return 0; // 读取失败
+    }
+    // 将高八位和低四位合并为一个12位整数
+    uint16_t adcValue = (static_cast<uint16_t>(buff[0]) << 4) | buff[1];
+
+    return OFFSET_DEG_C + adcValue * ADCLSB;
 }
 
 /* 按键状态检测 */
-void AXP173::aoToPowerOFFEnabale(void)
+void AXP173::setPowerKeyShutdownEnable(bool enabled)
 { // 按键时长大于关机时长自动关机
-    _I2C_write1Byte(0x36, (_I2C_read8Bit(0x36) | 0B00001000));
-}
-void AXP173::initIRQState(void)
-{ // 所有IRQ中断使能置零REG40H 41H 42H 43H 4AH
-    _I2C_write1Byte(0x40, ((_I2C_read8Bit(0x40) & 0B00000001) | 0B00000000));
-    _I2C_write1Byte(0x41, ((_I2C_read8Bit(0x41) & 0B00000000) | 0B00000000));
-    _I2C_write1Byte(0x42, ((_I2C_read8Bit(0x42) & 0B00000100) | 0B00000000));
-    _I2C_write1Byte(0x43, ((_I2C_read8Bit(0x43) & 0B11000010) | 0B00000000));
-    _I2C_write1Byte(0x4A, ((_I2C_read8Bit(0x4A) & 0B01111111) | 0B00000000));
+    uint8_t buff = readReg(REG_PEK_CTL);
+    if (enabled)
+        buff |= 0B00001000; // 设置第3位为1，表示按键时长大于关机时长关机
+    else
+        buff &= 0B11110111; // 设置第3位为0，表示按键时长大于关机时长不关机
+    writeReg(REG_PEK_CTL, buff);
 }
 
-void AXP173::setShortPressEnabale(void)
-{ // 短按键使能REG31H[3] 调用后立刻导致短按键中断发生
-    _I2C_write1Byte(0x31, (_I2C_read8Bit(0x31) | 0B00001000));
+void AXP173::enableIRQs(std::bitset<NUM_IRQn> irqs)
+{
+    uint32_t irqControl;
+    readRegs(REG_IRQ_CTL1, reinterpret_cast<uint8_t *>(&irqControl), 4);
+    irqControl |= irqs.to_ulong(); // 将要使能的中断位设置为1
+    writeRegs(REG_IRQ_CTL1, reinterpret_cast<const uint8_t *>(&irqControl), 4);
 }
-bool AXP173::getShortPressIRQState(void)
-{ // 读取短按键IRQ中断状态
-    return (_I2C_read8Bit(0x46) & 0B00000010) ? true : false;
+
+void AXP173::disableIRQs(std::bitset<NUM_IRQn> irqs)
+{
+    uint32_t irqControl;
+    readRegs(REG_IRQ_CTL1, reinterpret_cast<uint8_t *>(&irqControl), 4);
+    irqControl &= ~irqs.to_ulong(); // 将要禁用的中断位设置为0
+    writeRegs(REG_IRQ_CTL1, reinterpret_cast<const uint8_t *>(&irqControl), 4);
 }
-void AXP173::setShortPressIRQDisabale(void)
-{ // 短按键对应位写1结束中断
-    _I2C_write1Byte(0x46, (_I2C_read8Bit(0x46) | 0B00000010));
+
+void AXP173::clearIRQFlags(std::bitset<NUM_IRQn> irqs)
+{
+    uint32_t irqStatus;
+    readRegs(REG_IRQ_STAT1, reinterpret_cast<uint8_t *>(&irqStatus), 4);
+    irqStatus &= irqs.to_ulong(); // 清除指定的中断标志位
+    writeRegs(REG_IRQ_STAT1, reinterpret_cast<const uint8_t *>(&irqStatus), 4);
+}
+
+std::bitset<AXP173::NUM_IRQn> AXP173::getIRQFlags()
+{
+    uint32_t irqStatus;
+    readRegs(REG_IRQ_STAT1, reinterpret_cast<uint8_t *>(&irqStatus), 4);
+    std::bitset<NUM_IRQn> flags(irqStatus);
+    return flags;
 }
 
 void AXP173::setLongPressTime(LongPressTime pressTime)
-{ // 设置长按键触发时间 5 and 4 bit
-    _I2C_write1Byte(0x36, ((_I2C_read8Bit(0x36) & 0B11001111) | pressTime));
-}
-bool AXP173::getLongPressIRQState(void)
-{ // 读取长按键IRQ中断状态
-    return (_I2C_read8Bit(0x46) & 0B00000001) ? true : false;
-}
-void AXP173::setLongPressIRQDisabale(void)
-{ // 长按键对应位写1结束中断
-    _I2C_write1Byte(0x46, (_I2C_read8Bit(0x46) | 0B00000001));
-}
-
-/* 按键与睡眠 */
-void AXP173::prepareToSleep(void)
-{ // ldo断电
-
-    // setOutputEnable(AXP173::OP_LDO3, false);     //LDO3关闭输出
-}
-
-void AXP173::lightSleep(uint64_t time_in_us)
-{ // 类似于锁屏，需要打开REG31[3]
-
-    // prepareToSleep();
-}
-
-void AXP173::deepSleep(uint64_t time_in_us)
-{ // ldo断电加MCU低功耗模式
-  // prepareToSleep();
-
-    // /* nnn */
-    // setSleepMode (WiFiSleepType_t type, int listenInterval=0);  //WiFiSleepType_t type, int listenInterval=0
-
-    // RestoreFromLightSleep();
-}
-
-void AXP173::RestoreFromLightSleep(void)
-{ // ldo重启输出
-
-    // setOutputEnable(AXP173::OP_LDO3, true);     //LDO3设置为输出
-    // setOutputVoltage(AXP173::OP_LDO3, 3300);    //LDO3电压设置为3.300V
+{
+    uint8_t buff = readReg(REG_PEK_CTL);
+    buff &= 0B11001111;       // 重置4 and 5 bit
+    buff |= (pressTime << 4); // 将pressTime左移4位后与buff做或运算
+    writeReg(REG_PEK_CTL, buff);
 }
