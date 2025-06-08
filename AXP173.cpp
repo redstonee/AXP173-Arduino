@@ -13,93 +13,45 @@
 #include "AXP173.h"
 #include <Arduino.h>
 
-// Controlling and status registers
-constexpr uint8_t REG_PWR_STAT = 0x00;         // Power status register
-constexpr uint8_t REG_CHG_STAT = 0x01;         // Charge status register
-constexpr uint8_t REG_DATA_BUFF = 0x06;        // 6 bytes data buffer register addressing from 0x06 to 0x0B
-constexpr uint8_t REG_OUT_CTL = 0x12;          // Output control register
-constexpr uint8_t REG_DCDC2_VOLT = 0x23;       // DCDC2 voltage setting register
-constexpr uint8_t REG_DCDC1_VOLT = 0x26;       // DCDC1 voltage setting register
-constexpr uint8_t REG_LDO4_VOLT = 0x27;        // LDO4 voltage setting register
-constexpr uint8_t REG_LDO23_VOLT = 0x28;       // LDO2 and LDO3 voltage setting register
-constexpr uint8_t REG_VBUS_CTL = 0x30;         // VBUS control register
-constexpr uint8_t REG_VOFF_CTL = 0x31;         // Auto-power-off voltage setting register
-constexpr uint8_t REG_SD_LED_CTL = 0x32;       // Shutdown and LED control register
-constexpr uint8_t REG_CHG_CTL = 0x33;          // Charge voltage and current control register
-constexpr uint8_t REG_CHG_TIMEOUT_CTL = 0x34;  // Charge timeout control register
-constexpr uint8_t REG_PEK_CTL = 0x36;          // Power key control register
-constexpr uint8_t REG_DCDC_FREQ = 0x37;        // DCDC frequency control register
-constexpr uint8_t REG_TS_CHG_LOW_VOLT = 0x38;  // Thermal sensor low temperature voltage threshold register(charging)
-constexpr uint8_t REG_TS_CHG_HIGH_VOLT = 0x39; // Thermal sensor high temperature voltage threshold register(charging)
-constexpr uint8_t REG_APS_LOW_VOLT1 = 0x3A;    // APS low voltage threshold 1 register
-constexpr uint8_t REG_APS_LOW_VOLT2 = 0x3B;    // APS low voltage threshold 2 register
-constexpr uint8_t REG_TS_DIS_LOW_VOLT = 0x3C;  // Thermal sensor low temperature voltage threshold register(discharging)
-constexpr uint8_t REG_TS_DIS_HIGH_VOLT = 0x3D; // Thermal sensor high temperature voltage threshold register(discharging)
-constexpr uint8_t REG_DCDC_MODE = 0x80;        // DCDC mode setting register
-constexpr uint8_t REG_ADC_EN = 0x82;           // ADC enable register
-constexpr uint8_t REG_INT_TS_EN = 0x83;        // Internal temperature sensor enable register
-constexpr uint8_t REG_ADC_TS_CTL = 0x84;       // ADC sample rate and temperature sensor control register
-constexpr uint8_t REG_TIMER_CTL = 0x85;        // Timer control register
-constexpr uint8_t REG_OVER_TEMP_SD = 0x8F;     // Over temperature shutdown control register
-
-// IRQ registers
-constexpr uint8_t REG_IRQ_CTL1 = 0x40;
-constexpr uint8_t REG_IRQ_CTL2 = 0x41;
-constexpr uint8_t REG_IRQ_CTL3 = 0x42;
-constexpr uint8_t REG_IRQ_CTL4 = 0x43;
-constexpr uint8_t REG_IRQ_STAT1 = 0x44;
-constexpr uint8_t REG_IRQ_STAT2 = 0x45;
-constexpr uint8_t REG_IRQ_STAT3 = 0x46;
-constexpr uint8_t REG_IRQ_STAT4 = 0x47;
-constexpr uint8_t REG_IRQ_CTL5 = 0x4A;  // For timer interrupt only
-constexpr uint8_t REG_IRQ_STAT5 = 0x4D; // For timer interrupt only
-
-// ADC data registers
-constexpr uint8_t REG_ADC_ACIN_VH = 0x56;    // ACIN voltage high byte
-constexpr uint8_t REG_ADC_ACIN_VL = 0x57;    // ACIN voltage low (half) byte
-constexpr uint8_t REG_ADC_ACIN_CH = 0x58;    // ACIN current high byte
-constexpr uint8_t REG_ADC_ACIN_CL = 0x59;    // ACIN current low (half) byte
-constexpr uint8_t REG_ADC_VBUS_VH = 0x5A;    // VBUS voltage high byte
-constexpr uint8_t REG_ADC_VBUS_VL = 0x5B;    // VBUS voltage low (half) byte
-constexpr uint8_t REG_ADC_VBUS_CH = 0x5C;    // VBUS current high byte
-constexpr uint8_t REG_ADC_VBUS_CL = 0x5D;    // VBUS current low (half) byte
-constexpr uint8_t REG_ADC_INT_TS_H = 0x5E;   // Internal temperature sensor high byte
-constexpr uint8_t REG_ADC_INT_TS_L = 0x5F;   // Internal temperature sensor low (half) byte
-constexpr uint8_t REG_ADC_BAT_TS_H = 0x62;   // Battery temmperature sensor high byte
-constexpr uint8_t REG_ADC_BAT_TS_L = 0x63;   // Battery temperature sensor low (half) byte
-constexpr uint8_t REG_BAT_PWR_H = 0x70;      // Battery power high byte
-constexpr uint8_t REG_BAT_PWR_M = 0x71;      // Battery power middle byte
-constexpr uint8_t REG_BAT_PWR_L = 0x72;      // Battery power low byte
-constexpr uint8_t REG_ADC_BAT_VH = 0x78;     // Battery voltage high byte
-constexpr uint8_t REG_ADC_BAT_VL = 0x79;     // Battery voltage low (half) byte
-constexpr uint8_t REG_ADC_BAT_CHG_CH = 0x7A; // Battery charge current high byte
-constexpr uint8_t REG_ADC_BAT_CHG_CL = 0x7B; // Battery charge current low (half) byte
-constexpr uint8_t REG_ADC_BAT_DIS_CH = 0x7C; // Battery discharge current high byte
-constexpr uint8_t REG_ADC_BAT_DIS_CL = 0x7D; // Battery discharge current low (half) byte
-constexpr uint8_t REG_ADC_APS_VH = 0x7E;     // APS voltage high byte
-constexpr uint8_t REG_ADC_APS_VL = 0x7F;     // APS voltage low (half) byte
-
-// Coulometer registers
-constexpr uint8_t REG_COL_CHG_DATA3 = 0xB0; // Coulometer charging data register 3
-constexpr uint8_t REG_COL_CHG_DATA2 = 0xB1; // Coulometer charging data register 2
-constexpr uint8_t REG_COL_CHG_DATA1 = 0xB2; // Coulometer charging data register 1
-constexpr uint8_t REG_COL_CHG_DATA0 = 0xB3; // Coulometer charging data register 0
-constexpr uint8_t REG_COL_DIS_DATA3 = 0xB4; // Coulometer discharging data register 3
-constexpr uint8_t REG_COL_DIS_DATA2 = 0xB5; // Coulometer discharging data register 2
-constexpr uint8_t REG_COL_DIS_DATA1 = 0xB6; // Coulometer discharging data register 1
-constexpr uint8_t REG_COL_DIS_DATA0 = 0xB7; // Coulometer discharging data register 0
-constexpr uint8_t REG_COL_CTL = 0xB8;       // Coulometer control register
-
+/**
+ * @brief Clamp a value to a specified range.
+ *
+ * If input is less than min, it returns min; if input is greater than max, it returns max.
+ *
+ * @param input  The value to clamp.
+ * @param min The minimum value of the range.
+ * @param max The maximum value of the range.
+ *
+ * @return The clamped value, which will be within the range [min, max].
+ *
+ */
 inline uint16_t clampToRange(uint16_t input, uint16_t min, uint16_t max)
 {
     return std::max(std::min(input, max), min);
 }
 
+/**
+ * @brief The AXP173 PMIC constructor.
+ *
+ * @param wire The TwoWire instance to use for I2C communication.
+ * @param dev_addr The I2C device address of the AXP173 PMIC.
+ */
 AXP173::AXP173(TwoWire &wire, uint8_t dev_addr)
     : _wire(wire), _dev_addr(dev_addr)
 {
 }
 
+/**
+ * @brief Write a few registers in the AXP173 PMIC.
+ *
+ * This function writes a sequence of bytes to consecutive registers starting from the specified address.
+ *
+ * @param addr The starting address of the registers to write to.
+ * @param buf The pointer to the buffer containing the data to write.
+ * @param len The number of bytes to write from the buffer.
+ *
+ * @return true if the write operation was successful, false otherwise.
+ */
 bool AXP173::writeRegs(uint8_t addr, const uint8_t *buf, uint8_t len)
 {
     Wire.beginTransmission(_dev_addr);
@@ -111,6 +63,15 @@ bool AXP173::writeRegs(uint8_t addr, const uint8_t *buf, uint8_t len)
     return Wire.endTransmission() == 0;
 }
 
+/**
+ * @brief Read a few registers from the AXP173 PMIC.
+ *
+ * @param addr The starting address of the registers to read from.
+ * @param buf The pointer to the buffer where the read data will be stored.
+ * @param len The number of bytes to read into the buffer.
+ *
+ * @return The number of bytes successfully read from the registers.
+ */
 uint8_t AXP173::readRegs(uint8_t addr, uint8_t *buf, uint8_t len)
 {
     Wire.beginTransmission(_dev_addr);
@@ -131,6 +92,7 @@ uint8_t AXP173::readRegs(uint8_t addr, uint8_t *buf, uint8_t len)
 
 /**
  * @brief Initialize the AXP173 PMIC.
+ *
  * This function attempts to write a magic data sequence to the PMIC's data buffer
  * and reads it back to verify that the PMIC is responding correctly.
  * If the read data matches the magic data, it proceeds to set the PMIC configuration.
@@ -154,127 +116,18 @@ bool AXP173::begin()
         return false; // Magic data mismatch
     }
 
-    /* Set PMU Config */
-    setDefaultConfig();
-    disableIRQs(NUM_IRQn);   // Disable all interrupts
-    clearIRQFlags(NUM_IRQn); // Clear all interrupts
+    disableIRQs(NUM_IRQn);     // Disable all interrupts
+    clearIRQFlags(NUM_IRQn);   // Clear all interrupts
+    setCoulometerEnable(true); // 库仑计使能
 
     return true;
 }
 
-// 写在一切IIC设备初始化前面，电源芯片必须第一个初始化，并且在其他设备iic初始化之前设置好电压，否则其他设备程序初始化完结果没供电。
-void AXP173::setPmuPower()
-{ // 电源通道电压输出设置，交换位置可以设置上电时序，中间加delay可以延迟上电
-    /* Enable and set LDO2 voltage */
-    setOutputEnable(OP_LDO2, true);  // LDO2设置为输出
-    setOutputVoltage(OP_LDO2, 3300); // LDO2电压设置为3.000V
-
-    /* Enable and set LDO3 voltage */
-    setOutputEnable(OP_LDO3, true);  // LDO3设置为输出
-    setOutputVoltage(OP_LDO3, 3300); // LDO3电压设置为3.300V
-
-    /* Enable and set LDO4 voltage */
-    setOutputEnable(OP_LDO4, true);  // LDO4设置为输出
-    setOutputVoltage(OP_LDO4, 3300); // LDO4电压设置为3.300V
-
-    /* Enable and set DCDC1 voltage */
-    setOutputEnable(OP_DCDC1, true);  // DCDC1设置为输出
-    setOutputVoltage(OP_DCDC1, 3300); // DCDC1电压设置为3.300V
-
-    /* Enable and set DCDC2 voltage */
-    setOutputEnable(OP_DCDC2, true);  // DCDC2设置为输出
-    setOutputVoltage(OP_DCDC2, 2275); // DCDC2电压设置为2.275V
-
-    /* Enable Battery Charging */
-    setChargeEnable(true);       // 充电功能使能
-    setChargeCurrent(CHG_450mA); // 设置充电电流为450mA
-}
-void AXP173::setDefaultConfig()
-{ // 电源芯片ADC，库仑计等功能设置
-
-    /* Set on time */
-    setPowerOnPressTime(POWERON_1S); // 设置PEK开机时长为1S
-
-    /* Set off time */
-    setPowerOffPressTime(POWEROFF_4S); // 设置PEK关机时长为4S（我这个芯片因为定制好像只能设置6，8，10s）
-
-    /* Set PEKLongPress time */
-    setLongPressTime(LPRESS_1_5S); // 设置PEK长按键时长为1.5S
-
-    /* Enable VBUS ADC */
-    setADCEnable(ADC_VBUS_V, true); // VBUS ADC 电压使能
-    setADCEnable(ADC_VBUS_C, true); // VBUS ADC 电流使能
-
-    /* Enable Battery ADC */
-    setADCEnable(ADC_BAT_V, true); // Battery ADC 电压使能
-    setADCEnable(ADC_BAT_C, true); // Battery ADC 电流使能
-
-    /* Enable Coulometer and set COULOMETER_ENABLE*/
-    setCoulometer(COULOMETER_ENABLE, true); // 库仑计使能
-}
-
-/* 输入电源状态寄存器（地址：0x00）
- * 函数返回值：0 or 1
- * 函数作用：（具体见，h文件）
- * 函数写法功能解析：
- *  首先判断从输入电源状态寄存器读取的8bit值（由高到低读取7-->0）与0Bxxxxxxxx进行与运算，若两者相同则输出则为true反之为false
- * 再判断如下语句：  ("true" or" false") ? true ：false;   意为：若条件为true则返回1,反之返回0
- * 优点：直观简洁，避免使用if...else...语句拖慢处理效率
- */
-bool AXP173::isACINExist()
-{
-    return (readReg(REG_PWR_STAT) & 0B10000000) ? true : false;
-}
-
-bool AXP173::isACINAvl()
-{
-    return (readReg(REG_PWR_STAT) & 0B01000000) ? true : false;
-}
-
-bool AXP173::isVBUSExist()
-{
-    return (readReg(REG_PWR_STAT) & 0B00100000) ? true : false;
-}
-
-bool AXP173::isVBUSAvl()
-{
-    return (readReg(REG_PWR_STAT) & 0B00010000) ? true : false;
-}
-
-bool AXP173::getBatCurrentDir()
-{
-    return (readReg(REG_PWR_STAT) & 0B00000100) ? true : false;
-}
-
-/* 电源工作模式以及充电状态指示寄存器（地址：0x01）
- * 函数返回值：0 or 1
- * 函数作用：（具体见，h文件）
- * 函数写法功能解析：（同上）
- */
-bool AXP173::isAXP173OverTemp()
-{
-    return (readReg(REG_CHG_STAT) & 0B10000000) ? true : false;
-}
-
-bool AXP173::isCharging()
-{
-    return (readReg(REG_CHG_STAT) & 0B01000000) ? true : false;
-}
-
-bool AXP173::isBatExist()
-{
-    return (readReg(REG_CHG_STAT) & 0B00100000) ? true : false;
-}
-
-bool AXP173::isChargeCsmaller()
-{
-    return (readReg(REG_CHG_STAT) & 0B00000100) ? true : false;
-}
-
-/* 电源输出控制寄存器（地址：0x12）
- * 函数返回值：None
- * 函数作用：开关某一通道电源输出（具体见，h文件）
- * 函数写法功能解析：(见附件：pmu_outPutState_test.c)
+/**
+ * @brief Set the output enable state for a specific output channel.
+ *
+ * @param channel The output channel to control (DCDC1, DCDC2, LDO2, LDO3, LDO4, EXTEN).
+ * @param state The desired state for the output channel (true for enable, false for disable).
  */
 void AXP173::setOutputEnable(OutputChannel channel, bool state)
 {
@@ -303,31 +156,31 @@ void AXP173::setOutputVoltage(OutputChannel channel, uint16_t voltage)
     uint8_t buff = 0;
     switch (channel)
     {
-    case OP_DCDC1:
+    case DCDC1:
         voltage = (clampToRange(voltage, 700, 3500) - 700) / 25; // 0 - 112(step)
         buff = readReg(REG_DCDC1_VOLT);
         buff = (buff & 0B10000000) | (voltage & 0B01111111);
         writeReg(REG_DCDC1_VOLT, buff);
         break;
-    case OP_DCDC2:
+    case DCDC2:
         voltage = (clampToRange(voltage, 700, 2275) - 700) / 25;
         buff = readReg(REG_DCDC2_VOLT);
         buff = (buff & 0B11000000) | (voltage & 0B00111111);
         writeReg(0x23, buff);
         break;
-    case OP_LDO2:
+    case LDO2:
         voltage = (clampToRange(voltage, 1800, 3300) - 1800) / 100;
         buff = readReg(REG_LDO23_VOLT);
         buff = (buff & 0B00001111) | (voltage << 4);
         writeReg(REG_LDO23_VOLT, buff);
         break;
-    case OP_LDO3:
+    case LDO3:
         voltage = (clampToRange(voltage, 1800, 3300) - 1800) / 100;
         buff = readReg(REG_LDO23_VOLT);
         buff = (buff & 0B11110000) | (voltage);
         writeReg(REG_LDO23_VOLT, buff);
         break;
-    case OP_LDO4:
+    case LDO4:
         voltage = (clampToRange(voltage, 700, 3500) - 700) / 25;
         buff = readReg(REG_LDO4_VOLT);
         buff = (buff & 0B10000000) | (voltage & 0B01111111);
@@ -336,24 +189,6 @@ void AXP173::setOutputVoltage(OutputChannel channel, uint16_t voltage)
     default:
         break;
     }
-}
-
-/* 开关芯片控制寄存器（地址：0x32）
- * 函数返回值：None
- * 函数作用：开关芯片输出（具体见，h文件）
- *
- * 函数写法功能解析：给该寄存器7bit位写 "1" 会关闭芯片所有输出，为了不改变该寄存器的其它
- * 位设置，让二进制形式仅对7bit写一"0B1000 0000"和读取到的原寄存器状态做 "|" 或位运算即
- * 可。由于关机后该位上电会自动置 "0",因此更改时可以不使用 "&" 与位运算重置该位.
- */
-void AXP173::powerOFF(void)
-{ // 关闭芯片所有输出
-    writeReg(REG_SD_LED_CTL, (readReg(REG_SD_LED_CTL) | 0B10000000));
-}
-
-bool AXP173::powerState(void)
-{ // 若关机则返回false
-    return (readReg(REG_SD_LED_CTL) & 0B10000000) ? false : true;
 }
 
 /* 长按按键芯片开关机时间设置寄存器（地址：0x36）
@@ -376,6 +211,14 @@ void AXP173::setPowerOffPressTime(PowerOffPressTime offTime)
     uint8_t buff = readReg(REG_PEK_CTL);
     buff &= 0B11111100; // 保留前6位，重置0 and 1 bit
     buff |= (offTime);  // 将offTime直接与buff做或运算
+    writeReg(REG_PEK_CTL, buff);
+}
+
+void AXP173::setLongPressTime(LongPressTime pressTime)
+{
+    uint8_t buff = readReg(REG_PEK_CTL);
+    buff &= 0B11001111;       // 重置4 and 5 bit
+    buff |= (pressTime << 4); // 将pressTime左移4位后与buff做或运算
     writeReg(REG_PEK_CTL, buff);
 }
 
@@ -441,13 +284,27 @@ void AXP173::setChipTempEnable(bool state)
  *
  * 函数写法功能解析：同上
  */
-void AXP173::setCoulometer(CoulometerStatus option, bool state)
+void AXP173::setCoulometerEnable(bool enabled)
 {
     uint8_t buff = readReg(REG_COL_CTL);
-    if (state)
-        buff |= (1U << option); // 使能库仑计状态
+    if (enabled)
+        buff |= (1U << 7);
     else
-        buff &= ~(1U << option); // 禁止库仑计状态
+        buff &= ~(1U << 7);
+    writeReg(REG_COL_CTL, buff);
+}
+
+void AXP173::pauseCoulometer()
+{
+    uint8_t buff = readReg(REG_COL_CTL);
+    buff |= (1U << 6); // 设置PAUSE位
+    writeReg(REG_COL_CTL, buff);
+}
+
+void AXP173::resetCoulometer()
+{
+    uint8_t buff = readReg(REG_COL_CTL);
+    buff |= (1U << 5); // 设置RESET位
     writeReg(REG_COL_CTL, buff);
 }
 
@@ -659,6 +516,11 @@ void AXP173::setPowerKeyShutdownEnable(bool enabled)
     writeReg(REG_PEK_CTL, buff);
 }
 
+/**
+ * @brief Enable or disable specific IRQs.
+ *
+ * @param irqs A bitset representing the IRQs to enable or disable.
+ */
 void AXP173::enableIRQs(std::bitset<NUM_IRQn> irqs)
 {
     uint32_t irqControl;
@@ -667,6 +529,11 @@ void AXP173::enableIRQs(std::bitset<NUM_IRQn> irqs)
     writeRegs(REG_IRQ_CTL1, reinterpret_cast<const uint8_t *>(&irqControl), 4);
 }
 
+/**
+ * @brief Disable specific IRQs.
+ *
+ * @param irqs A bitset representing the IRQs to disable.
+ */
 void AXP173::disableIRQs(std::bitset<NUM_IRQn> irqs)
 {
     uint32_t irqControl;
@@ -675,6 +542,11 @@ void AXP173::disableIRQs(std::bitset<NUM_IRQn> irqs)
     writeRegs(REG_IRQ_CTL1, reinterpret_cast<const uint8_t *>(&irqControl), 4);
 }
 
+/**
+ * @brief Clear specific IRQ flags.
+ *
+ * @param irqs A bitset representing the IRQs to clear.
+ */
 void AXP173::clearIRQFlags(std::bitset<NUM_IRQn> irqs)
 {
     uint32_t irqStatus;
@@ -683,18 +555,15 @@ void AXP173::clearIRQFlags(std::bitset<NUM_IRQn> irqs)
     writeRegs(REG_IRQ_STAT1, reinterpret_cast<const uint8_t *>(&irqStatus), 4);
 }
 
+/**
+ * @brief Get the pending IRQ flags.
+ *
+ * @return std::bitset<NUM_IRQn> A bitset representing the pending IRQ flags.
+ */
 std::bitset<AXP173::NUM_IRQn> AXP173::getIRQFlags()
 {
     uint32_t irqStatus;
     readRegs(REG_IRQ_STAT1, reinterpret_cast<uint8_t *>(&irqStatus), 4);
     std::bitset<NUM_IRQn> flags(irqStatus);
     return flags;
-}
-
-void AXP173::setLongPressTime(LongPressTime pressTime)
-{
-    uint8_t buff = readReg(REG_PEK_CTL);
-    buff &= 0B11001111;       // 重置4 and 5 bit
-    buff |= (pressTime << 4); // 将pressTime左移4位后与buff做或运算
-    writeReg(REG_PEK_CTL, buff);
 }
