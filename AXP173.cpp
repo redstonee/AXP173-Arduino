@@ -521,7 +521,7 @@ void AXP173::setPowerKeyShutdownEnable(bool enabled)
  *
  * @param irqs A bitset representing the IRQs to enable or disable.
  */
-void AXP173::enableIRQs(std::bitset<NUM_IRQn> irqs)
+void AXP173::enableIRQs(const std::bitset<NUM_IRQn> irqs)
 {
     uint32_t irqControl;
     readRegs(REG_IRQ_CTL1, reinterpret_cast<uint8_t *>(&irqControl), 4);
@@ -534,7 +534,7 @@ void AXP173::enableIRQs(std::bitset<NUM_IRQn> irqs)
  *
  * @param irqs A bitset representing the IRQs to disable.
  */
-void AXP173::disableIRQs(std::bitset<NUM_IRQn> irqs)
+void AXP173::disableIRQs(const std::bitset<NUM_IRQn> irqs)
 {
     uint32_t irqControl;
     readRegs(REG_IRQ_CTL1, reinterpret_cast<uint8_t *>(&irqControl), 4);
@@ -547,7 +547,7 @@ void AXP173::disableIRQs(std::bitset<NUM_IRQn> irqs)
  *
  * @param irqs A bitset representing the IRQs to clear.
  */
-void AXP173::clearIRQFlags(std::bitset<NUM_IRQn> irqs)
+void AXP173::clearIRQFlags(const std::bitset<NUM_IRQn> irqs)
 {
     uint32_t irqStatus;
     readRegs(REG_IRQ_STAT1, reinterpret_cast<uint8_t *>(&irqStatus), 4);
