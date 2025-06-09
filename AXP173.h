@@ -334,9 +334,9 @@ public:
     float getTSTemp();   // 返回高八位 + 低四位芯片TS脚热敏电阻检测到的电池温度  地址：高0x62 低0x63
 
     /* IRQ support */
-    void enableIRQs(std::bitset<NUM_IRQn> irqs);
-    void disableIRQs(std::bitset<NUM_IRQn> irqs);
-    void clearIRQFlags(std::bitset<NUM_IRQn> irqs);
+    void enableIRQs(const std::bitset<NUM_IRQn> irqs);
+    void disableIRQs(const std::bitset<NUM_IRQn> irqs);
+    void clearIRQFlags(const std::bitset<NUM_IRQn> irqs);
     std::bitset<NUM_IRQn> getIRQFlags();
 };
 
