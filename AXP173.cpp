@@ -116,8 +116,8 @@ bool AXP173::begin()
         return false; // Magic data mismatch
     }
 
-    disableIRQs(NUM_IRQn);     // Disable all interrupts
-    clearIRQFlags(NUM_IRQn);   // Clear all interrupts
+    clearIRQFlags(0xffffffff); // Clear all interrupts
+    disableIRQs(0xffffffff);   // Disable all interrupts
     setCoulometerEnable(true); // 库仑计使能
 
     return true;

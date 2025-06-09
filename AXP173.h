@@ -15,7 +15,6 @@
 #define _AXP173_H_
 
 #include <Wire.h>
-#include <functional>
 #include <bitset>
 
 class AXP173
