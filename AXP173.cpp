@@ -418,8 +418,8 @@ float AXP173::getBatCurrent()
     }
 
     // 将高八位和低四位合并为一个12位整数
-    uint16_t CurrentIn = (static_cast<uint16_t>(buff[0]) << 4) | buff[1];
-    uint16_t CurrentOut = (static_cast<uint16_t>(buff[2]) << 4) | buff[3];
+    uint16_t CurrentIn = (static_cast<uint16_t>(buff[0]) << 5) | buff[1];
+    uint16_t CurrentOut = (static_cast<uint16_t>(buff[2]) << 5) | buff[3];
     return (CurrentIn - CurrentOut) * ADCLSB;
 }
 
